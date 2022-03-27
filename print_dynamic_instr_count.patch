@@ -1,0 +1,46 @@
+diff --git a/llvm/tools/lli/lli.cpp b/llvm/tools/lli/lli.cpp
+index d20daa07196b..01359022ff01 100644
+--- a/llvm/tools/lli/lli.cpp
++++ b/llvm/tools/lli/lli.cpp
+@@ -16,6 +16,7 @@
+ #include "ForwardingMemoryManager.h"
+ #include "llvm/ADT/StringExtras.h"
+ #include "llvm/ADT/Triple.h"
++#include "llvm/ADT/Statistic.h"
+ #include "llvm/Bitcode/BitcodeReader.h"
+ #include "llvm/CodeGen/CommandFlags.h"
+ #include "llvm/CodeGen/LinkAllCodegenComponents.h"
+@@ -70,6 +71,7 @@
+ #include <cerrno>
+ 
+ #if !defined(_MSC_VER) && !defined(__MINGW32__)
++#include <llvm/ADT/Statistic.h>
+ #include <unistd.h>
+ #else
+ #include <io.h>
+@@ -450,10 +452,12 @@ int main(int argc, char **argv, char * const *envp) {
+ 
+   ExitOnErr(loadDylibs());
+ 
+-  if (UseJITKind == JITKind::MCJIT)
+-    disallowOrcOptions();
+-  else
+-    return runOrcJIT(argv[0]);
++  if (!ForceInterpreter) {
++    if (UseJITKind == JITKind::MCJIT)
++      disallowOrcOptions();
++    else
++      return runOrcJIT(argv[0]);
++  }
+ 
+   // Old lli implementation based on ExecutionEngine and MCJIT.
+   LLVMContext Context;
+@@ -695,6 +699,8 @@ int main(int argc, char **argv, char * const *envp) {
+     // Run static destructors.
+     EE->runStaticConstructorsDestructors(true);
+ 
++    llvm::PrintStatistics();
++
+     // If the program didn't call exit explicitly, we should call it now.
+     // This ensures that any atexit handlers get called correctly.
+     if (Function *ExitF =
