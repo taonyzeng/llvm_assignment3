@@ -13,3 +13,6 @@ opt -enable-new-pm=0 -load ./liveness.so --liveness ./test/liveness-test-m2r.bc 
 lli -stats -force-interpreter testcode.bc
 
 llvm-dis
+
+
+opt -enable-new-pm=0 --loop-simplify -load ../LoopInvariantCodeMotion.so --loop-invariant-code-motion ./m2r_licm_test_2.bc -o out_licm_test2

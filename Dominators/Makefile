@@ -1,6 +1,6 @@
 all: dominator.so sub-make
 
-LIB_DIR = ../
+LIB_DIR = ../LIBS
 SRC_DIR = src
 CXX = clang
 CXXFLAGS = $(shell llvm-config --cxxflags) -fcolor-diagnostics -g -O0 -fPIC

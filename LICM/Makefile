@@ -1,6 +1,6 @@
 all: LoopInvariantCodeMotion.so sub-make
 
-LIB_DIR = ../
+LIB_DIR = ../LIBS
 SRC_DIR = src
 DOM_PASS_DIR=../Dominators/src
 

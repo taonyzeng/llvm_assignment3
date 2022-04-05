@@ -1,6 +1,6 @@
 /////////////////////////////////////////
-// 15-745 S15 Assignment 3:
-// Group: nkshah, jarulraj
+// CS 5544 Assignment 3:
+// Group: ZENG TAO
 /////////////////////////////////////////
 
 #ifndef __DOMINANCE_H
@@ -16,7 +16,7 @@
 #include "llvm/Pass.h"
 #include "llvm/Analysis/LoopInfo.h"
 
-#include "../../dataflow.h"
+#include "../../LIBS/dataflow.h"
 
 using namespace std;
 

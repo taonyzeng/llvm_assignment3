@@ -1,6 +1,6 @@
 /////////////////////////////////////////
-// 15-745 S15 Assignment 3:
-// Group: nkshah, jarulraj
+// CS 5544 Assignment 3: Dominator
+// Group: ZENG TAO
 /////////////////////////////////////////
 
 #include <set>
