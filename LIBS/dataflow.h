@@ -1,6 +1,5 @@
-// ECE/CS 5544 S22 Assignment 2: dataflow.h
-// Group:
-
+// ECE/CS 5544 Assignment 2: dataflow.h
+// Group: ZENG TAO
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifndef __CLASSICAL_DATAFLOW_H__
@@ -107,7 +106,6 @@ namespace llvm {
 
 
         private:
-
             /* Pass-specific parameters */
             Direction direction;
             MeetOp meetup_op;

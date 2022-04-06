@@ -1,235 +1,227 @@
-// CS 5544 Assignment 3: DeadCodeElimination
+// CS5544 Assignment 3: DeadCodeElimination
 // Group: ZENG TAO
 ////////////////////// //////////////////////////////////////////////////////////
 
-#include "../../LIBS/dataflow.h"
+#include "DeadCodeElimination.hpp"
 
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/ADT/PostOrderIterator.h"
+namespace llvm{
 
-using namespace llvm;
+    DCE::DCE() : FunctionPass(ID) {
+        // Setup the pass
+        Direction direction = Direction::BACKWARD;
+        MeetOp meet_op = MeetOp::UNION;
 
-namespace {
+        pass = DCEAnalysis(direction, meet_op);
+    }
 
-    class DCE : public FunctionPass {
-    public:
-        static char ID;
+    void DCE::getAnalysisUsage(AnalysisUsage& AU) const {
+        AU.setPreservesAll();
+    }
 
-        DCE() : FunctionPass(ID) {
+    std::vector<Instruction*> DCE::computeDeleteSet(BasicBlock* block, BitVector& SLV, DataFlowResult& output){
+        // Figure out instructions to delete
+        std::vector<Instruction *> deleteSet;
 
-            // Setup the pass
-            Direction direction = Direction::BACKWARD;
-            MeetOp meet_op = MeetOp::UNION;
+        for (BasicBlock::reverse_iterator insn = block->rbegin(); insn != block->rend(); ++insn) {
+            Instruction* I = &(*insn);
 
-            pass = DCEAnalysis(direction, meet_op);
-        }
+            // Check if insn is live
+            if(I == block->getTerminator() ||  isa<DbgInfoIntrinsic>(I) ||
+               isa<LandingPadInst>(I) ||  I->mayHaveSideEffects()){
+                continue;
+            }
 
-        virtual void getAnalysisUsage(AnalysisUsage& AU) const {
-            AU.setPreservesAll();
-        }
 
-    private:
-
-        // DCE Analysis class
-        class DCEAnalysis : public DataFlow {
-        public:
-
-            DCEAnalysis() : DataFlow(Direction::INVALID_DIRECTION, MeetOp::INVALID_MEETOP) {	}
-            DCEAnalysis(Direction direction, MeetOp meet_op) : DataFlow(direction, meet_op) { }
-
-        protected:
-            TransferOutput transferFn(BitVector input,  std::vector<void*> domain, std::unordered_map<void*, int> domainToIndex, BasicBlock* block)
+            if(std::find(domain.begin(), domain.end(), I) != domain.end())
             {
-                TransferOutput transferOutput;
+                int valInd = output.domainToIndex[(void*)I];
 
-                // Calculating the set of locally exposed uses
-                int domainSize = domainToIndex.size();
-                BitVector defSet(domainSize);
-                BitVector useSet(domainSize);
-
-                // First initialize
-                useSet = input;
-
-                // Iterate forward through the block to find live insns
-                for (BasicBlock::iterator insn = block->begin(); insn != block->end(); ++insn) {
-                    Instruction *I = &(*insn);
-
-                    if(I == block->getTerminator() ||  isa<DbgInfoIntrinsic>(I) ||
-                       isa<LandingPadInst>(I) ||  I->mayHaveSideEffects())
-                    {
-                        std::unordered_map<void*, int>::iterator iter = domainToIndex.find((void*)I);
-
-                        if(iter != domainToIndex.end())
-                        {
-                            int valInd = domainToIndex[(void*)I];
-
-                            DBG(outs() << "Marking live instruction :: " << printValue(I) << "\n");
-
-                            useSet.set(valInd);
-                        }
-                    }
+                if(SLV[valInd] == false)
+                {
+                    DBG(outs() << "Going to delete instruction :: " << printValue(I) << "\n");
+                    deleteSet.push_back(I);
                 }
-
-                // Iterate backward through the block, update SLV
-                for (BasicBlock::reverse_iterator insn = block->rbegin(); insn != block->rend(); ++insn) {
-
-                    // Alter data flow only if insn itself is strongly live
-                    std::unordered_map<void*, int>::iterator iter = domainToIndex.find((void*)(&(*insn)));
-
-                    if(iter != domainToIndex.end())
-                    {
-                        int valInd = domainToIndex[(void*)(&(*insn))];
-                        if(useSet[valInd] == false)
-                            continue;
-
-                        // Phi nodes: add operands to the list we store in transferOutput
-                        if (PHINode* phi_insn = dyn_cast<PHINode>(&*insn)) {
-                            for (int ind = 0; ind < phi_insn->getNumIncomingValues(); ind++) {
-
-                                Value* val = phi_insn->getIncomingValue(ind);
-
-                                if (isa<Instruction>(val)) {
-                                    BasicBlock* valBlock = phi_insn->getIncomingBlock(ind);
-
-                                    // neighborVals has no mapping for this block, then create one
-                                    if (transferOutput.neighborVals.find(valBlock) == transferOutput.neighborVals.end())
-                                        transferOutput.neighborVals[valBlock] = BitVector(domainSize);
-
-                                    int valInd = domainToIndex[(void*)val];
-
-                                    DBG(outs() << "Marking phi operand :: " << printValue(val) << "\n");
-
-                                    // Set the bit corresponding to "val"
-                                    transferOutput.neighborVals[valBlock].set(valInd);
-                                }
-                            }
-                        }
-                        //Non-phi nodes: Simply add operands to the use set
-                        else {
-                            for (User::op_iterator opnd = insn->op_begin(), opE = insn->op_end(); opnd != opE; ++opnd) {
-                                Value* val = *opnd;
-
-                                if (isa<Instruction>(val)) {
-                                    int valInd = domainToIndex[(void*)val];
-
-                                    DBG(outs() << "Marking operand :: " << printValue(val) << "\n");
-
-                                    useSet.set(valInd);
-                                }
-                            }
-                        }
-
-                        // Definitions
-                        iter = domainToIndex.find((void*)&(*insn));
-                        if (iter != domainToIndex.end())
-                            defSet.set((*iter).second);
-                    }
-                }
-
-                // Transfer function = useSet U (input - defSet)
-
-                transferOutput.element = defSet;
-                // Complement of defSet
-                transferOutput.element.flip();
-                // input - defSet = input INTERSECTION Complement of defSet
-                transferOutput.element &= input;
-                transferOutput.element |= useSet;
-
-                DBG(outs() << "\n\n--------------------------------------------------\n\n");
-
-                return transferOutput;
             }
-
-        };
-
-        // The pass
-        DCEAnalysis pass;
-
-        bool runOnFunction(Function &F) {
-            // Print Information
-            //std::string function_name = F.getName();
-            DBG(outs() << "FUNCTION :: " << F.getName() << "\n");
-            DataFlowResult output;
-
-            // Setup the pass
-            std::vector<void*> domain;
-
-            // Compute domain for function
-            for(inst_iterator II = inst_begin(F), IE = inst_end(F); II!=IE; ++II) {
-                Instruction& insn(*II);
-
-                if(std::find(domain.begin(),domain.end(),(&(*II))) == domain.end())
-                    domain.push_back((void*)(&(*II)));
-            }
-
-            DBG(outs() << "------------------------------------------\n\n");
-            DBG(outs() << "DOMAIN :: " << domain.size() << "\n");
-            for(void* element : domain)
-            {
-                DBG(outs() << "Element : " << *((Value*) element) << "\n"); // Could also use getShortValueName((Value*) element)
-            }
-            DBG(outs() << "------------------------------------------\n\n");
-
-            // For SLVA, both are empty sets
-            BitVector boundaryCond(domain.size(), false);
-            BitVector initCond(domain.size(), false);
-            bool modified = false;
-
-            // Apply pass
-            output = pass.run(F, domain, boundaryCond, initCond);
-            pass.printResult(output);
-
-            // Prepare an order in which we will traverse BasicBlocks.
-            for (po_iterator<BasicBlock*> BI = po_begin(&F.getEntryBlock()), BE = po_end(&F.getEntryBlock()); BI != BE; ++BI) {
-                BasicBlock* block = *BI;
-
-                // strong liveness at IN
-                BitVector SLV = output.result[block].in;
-                outs() << formatBitVector(SLV) << "\n";
-                std::vector<Instruction *> deleteSet;
-
-                // Figure out instructions to delete
-                for (BasicBlock::reverse_iterator insn = BI->rbegin(); insn != BI->rend(); ++insn) {
-                    Instruction* I = &(*insn);
-
-                    // Check if insn is live
-                    if(I == block->getTerminator() ||  isa<DbgInfoIntrinsic>(I) ||
-                       isa<LandingPadInst>(I) ||  I->mayHaveSideEffects())
-                        continue;
-
-                    // Check if use empty
-                    //if(!I->use_empty())
-                    //    continue;
-
-                    if(std::find(domain.begin(), domain.end(), I) != domain.end())
-                    {
-                        int valInd = output.domainToIndex[(void*)I];
-
-                        if(SLV[valInd] == false)
-                        {
-                            DBG(outs() << "Going to delete instruction :: " << printValue(I) << "\n");
-                            deleteSet.push_back(I);
-                            modified = true;
-                        }
-                    }
-                }
-
-                // do actual deletion
-                for(auto I : deleteSet){
-                    if(!I->use_empty())
-                        continue;
-                    DBG(outs() << "Deleting instruction :: " << printValue(I) << "\n");
-                    I->eraseFromParent();
-                }
-
-            }
-
-            // Potential modification
-            return modified;
         }
 
-    };
+        return deleteSet;
+    }
+
+    void DCE::initDomain(Function &F){
+
+        for(inst_iterator II = inst_begin(F), IE = inst_end(F); II!=IE; ++II) {
+            Instruction& insn(*II);
+
+            if(std::find(domain.begin(),domain.end(),(&(*II))) == domain.end())
+                domain.push_back((void*)(&(*II)));
+        }
+
+        DBG(outs() << "------------------------------------------\n\n");
+        DBG(outs() << "DOMAIN :: " << domain.size() << "\n");
+        for(void* element : domain)
+        {
+            DBG(outs() << "Element : " << *((Value*) element) << "\n");
+        }
+        DBG(outs() << "------------------------------------------\n\n");
+    }
+
+    bool DCE::runOnFunction(Function &F) {
+        // Print Information
+        //std::string function_name = F.getName();
+        DBG(outs() << "FUNCTION :: " << F.getName() << "\n");
+
+        // Compute domain for function
+        initDomain(F);
+
+        // For SLVA, both are empty sets
+        BitVector boundaryCond(domain.size(), false);
+        BitVector initCond(domain.size(), false);
+        bool modified = false;
+
+        // Apply pass
+        DataFlowResult output = pass.run(F, domain, boundaryCond, initCond);
+        pass.printResult(output);
+
+        // Prepare an order in which we will traverse BasicBlocks.
+        for (po_iterator<BasicBlock*> BI = po_begin(&F.getEntryBlock()), BE = po_end(&F.getEntryBlock()); BI != BE; ++BI) {
+            BasicBlock* block = *BI;
+
+            // strong liveness at IN
+            BitVector SLV = output.result[block].in;
+            outs() << formatBitVector(SLV) << "\n";
+
+            auto&& deleteSet = computeDeleteSet(block, SLV, output);
+            //removed the variable not in the strong liveness variable set.
+            for(auto I : deleteSet){
+                if(!I->use_empty())
+                    continue;
+                DBG(outs() << "Deleting instruction :: " << printValue(I) << "\n");
+                I->eraseFromParent();
+                modified = true;
+            }
+        }
+
+        // Potential modification
+        return modified;
+    }
+
+    BitVector DCEAnalysis::initUseSet(BasicBlock* block, BitVector& input, std::unordered_map<void*, int>& domainToIndex){
+        //First initialize
+        BitVector useSet(input);
+
+        // Iterate forward through the block to find live insns
+        for (BasicBlock::iterator insn = block->begin(); insn != block->end(); ++insn) {
+            Instruction *I = &(*insn);
+
+            if(I == block->getTerminator() ||  isa<DbgInfoIntrinsic>(I) ||
+               isa<LandingPadInst>(I) ||  I->mayHaveSideEffects())
+            {
+                std::unordered_map<void*, int>::iterator iter = domainToIndex.find((void*)I);
+
+                if(iter != domainToIndex.end())
+                {
+                    int valInd = domainToIndex[(void*)I];
+
+                    DBG(outs() << "Marking live instruction :: " << printValue(I) << "\n");
+
+                    useSet.set(valInd);
+                }
+            }
+        }
+
+        return useSet;
+    }
+
+    void DCEAnalysis::updateUseSet(BitVector& useSet, Instruction* insn, std::unordered_map<void*, int>& domainToIndex){
+
+        for (User::op_iterator opnd = insn->op_begin(), opE = insn->op_end(); opnd != opE; ++opnd) {
+            Value* val = *opnd;
+
+            if (isa<Instruction>(val)) {
+                int valInd = domainToIndex[(void*)val];
+
+                DBG(outs() << "Marking operand :: " << printValue(val) << "\n");
+
+                useSet.set(valInd);
+            }
+        }
+    }
+
+
+    void DCEAnalysis::processPhiNode(PHINode* phi_insn, TransferOutput& transferOutput, std::unordered_map<void*, int>& domainToIndex){
+
+        int domainSize = domainToIndex.size();
+        for (int ind = 0; ind < phi_insn->getNumIncomingValues(); ind++) {
+
+            Value* val = phi_insn->getIncomingValue(ind);
+
+            if (isa<Instruction>(val)) {
+                BasicBlock* valBlock = phi_insn->getIncomingBlock(ind);
+
+                // neighborVals has no mapping for this block, then create one
+                if (transferOutput.neighborVals.find(valBlock) == transferOutput.neighborVals.end())
+                    transferOutput.neighborVals[valBlock] = BitVector(domainSize);
+
+                int valInd = domainToIndex[(void*)val];
+
+                DBG(outs() << "Marking phi operand :: " << printValue(val) << "\n");
+
+                // Set the bit corresponding to "val"
+                transferOutput.neighborVals[valBlock].set(valInd);
+            }
+        }
+    }
+
+    TransferOutput DCEAnalysis::transferFn(BitVector input,  std::vector<void*> domain, std::unordered_map<void*, int> domainToIndex, BasicBlock* block){
+        TransferOutput transferOutput;
+
+        // Calculating the set of locally exposed uses
+        int domainSize = domainToIndex.size();
+        BitVector defSet(domainSize);
+        BitVector useSet = initUseSet(block, input, domainToIndex);
+
+        // Iterate backward through the block, update SLV
+        for (BasicBlock::reverse_iterator insn = block->rbegin(); insn != block->rend(); ++insn) {
+
+            // Alter data flow only if insn itself is strongly live
+            std::unordered_map<void*, int>::iterator iter = domainToIndex.find((void*)(&(*insn)));
+
+            if(iter != domainToIndex.end())
+            {
+                int valInd = domainToIndex[(void*)(&(*insn))];
+                if(useSet[valInd] == false)
+                    continue;
+
+                // Phi nodes: add operands to the list we store in transferOutput
+                if (PHINode* phi_insn = dyn_cast<PHINode>(&*insn)) {
+                    processPhiNode(phi_insn, transferOutput, domainToIndex);
+                }
+                //Non-phi nodes: Simply add operands to the use set
+                else {
+                    updateUseSet(useSet, &(*insn), domainToIndex);
+                }
+
+                // Definitions
+                iter = domainToIndex.find((void*)&(*insn));
+                if (iter != domainToIndex.end())
+                    defSet.set((*iter).second);
+            }
+        }
+
+        // Transfer function = useSet U (input - defSet)
+
+        transferOutput.element = defSet;
+        // Complement of defSet
+        transferOutput.element.flip();
+        // input - defSet = input INTERSECTION Complement of defSet
+        transferOutput.element &= input;
+        transferOutput.element |= useSet;
+
+        DBG(outs() << "\n\n--------------------------------------------------\n\n");
+
+        return transferOutput;
+    }
 
     char DCE::ID = 0;
-    RegisterPass<DCE> X("dead-code-elimination", "15745 Dead Code Elimination");
+    RegisterPass<DCE> X("dead-code-elimination", "CS5544 Dead Code Elimination");
 }

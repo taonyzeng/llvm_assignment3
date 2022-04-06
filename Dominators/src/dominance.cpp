@@ -95,7 +95,8 @@ namespace llvm {
 
     void DominanceAnalysis::printIdom(std::unordered_map<BasicBlock*, BasicBlock*> idom, Loop* L) {
         std::vector<BasicBlock*> BBs = L->getBlocks();
-        errs() << "\n\nNew Loop\n";
+        errs() << "\nLoop<depth = " << L->getLoopDepth() << ">\n";
+        //errs() << "\n\nNew Loop\n";
         for (int i=0; i < BBs.size(); ++i) {
             errs() << BBs[i]->getName() << " idom " << idom[BBs[i]]->getName() << "\n";
         }
