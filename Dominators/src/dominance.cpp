@@ -3,15 +3,6 @@
 // Group: ZENG TAO
 /////////////////////////////////////////
 
-#include <set>
-#include <queue>
-#include <vector>
-
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/IR/Function.h"
-#include "llvm/Pass.h"
-#include "llvm/Analysis/LoopInfo.h"
-
 #include "dominance.h"
 
 using namespace std;
@@ -21,7 +12,8 @@ namespace llvm {
     // Compute Dominance Relations
     DataFlowResult DominanceAnalysis::computeDom(Loop* L) {
 
-        // Domain = basic blocks. Since our data flow runs on functions, get a block in the loop, and then get its parent function.
+        // Domain = basic blocks. Since our data flow runs on functions, get a block in the loop, 
+        // and then get its parent function.
         // Need to convert BBs to void* for our generic implementation
         Function* F = L->getBlocks().front()->getParent();
         Function::BasicBlockListType &FuncBBs = F->getBasicBlockList();
@@ -47,50 +39,56 @@ namespace llvm {
         return dom.result[Y].in[dom.domainToIndex[X]];
     }
 
+    //
+    // For a given node, find the immediate dominator in the tree using a reverse
+    // breadth first search. If the current node is not the initial node, and the
+    // current node is in the initial node's strict dominators list, return the
+    // current node.
+    //
+    BasicBlock* DominanceAnalysis::getIdom(DataFlowResult& domResult, BasicBlock* node) {
+      std::queue<BasicBlock*> worklist;
+      std::unordered_set<BasicBlock*> visited;
+      // Set initial conditions.
+      BitVector path = domResult.result[node].out;
+      worklist.push(node);
+      while (!worklist.empty()) {
+        BasicBlock* current = worklist.front();
+        worklist.pop();
+        // Skip if visited.
+        if (visited.count(current)) {
+          continue;
+        }
+        // Did we find the idom?
+        int curIndex = domResult.domainToIndex[current];
+        if (node != current && path[curIndex]) {
+            return current;
+        }
+        // Mark visited and add all predecessors to the worklist.
+        visited.insert(current);
+        for (pred_iterator I = pred_begin(current), IE = pred_end(current);
+            I != IE; ++I) {
+          worklist.push(*I);
+        }
+      }
+      // Return null if there is no idom node (possible for 1st block).
+      return NULL;
+    }
+
+
+
     std::unordered_map<BasicBlock*, BasicBlock*> DominanceAnalysis::computeIdom(DataFlowResult dominanceResult) {
-        std::unordered_map<BasicBlock*, BasicBlock*> idom;
+        std::unordered_map<BasicBlock*, BasicBlock*> idom_map;
         std::vector<BasicBlock*> domain(dominanceResult.domainToIndex.size());  // Reconstruct index -> BasicBlock* mapping from domainToIndex
-        for (std::unordered_map<void*,int>::iterator it = dominanceResult.domainToIndex.begin(); it != dominanceResult.domainToIndex.end(); ++it ) {
-            domain[it->second] = (BasicBlock*)it->first;
+        for (auto kv : dominanceResult.domainToIndex) {
+            domain[kv.second] = (BasicBlock*)kv.first;
         }
 
-        // A IDOM B = A DOM B && (~exists C s.t. A DOM C && C DOM B)
         for (int indB = 0; indB < domain.size(); ++indB) {
-            BasicBlock* B = domain[indB];
-
-            for (int indA=0; indA < domain.size(); ++indA) {
-                if (indA == indB)
-                    continue;
-                BasicBlock* A = domain[indA];
-                if (!dominates(A,B,dominanceResult))
-                    continue;
-                bool isIdom = true;
-
-                // Now, check if there exists a C != A such that A dom C & C dom B
-                for (int indC=0; indC < domain.size(); ++indC) {
-                    if (indC == indA || indC == indB)
-                        continue;
-
-                    BasicBlock* C = domain[indC];
-                    if (dominates(A,C,dominanceResult) && dominates(C,B,dominanceResult)) {
-                        isIdom = false;
-                        break;
-                    }
-                }
-
-                if (isIdom) {
-                    if(idom.find(B) != idom.end()) {
-                        errs() << "IDOM ALREADY PRESENT!! " << B->getName() << " idom " << idom.find(B)->second->getName() << "\n";
-                        errs() << "NOW ADDING!! " << B->getName() << " idom " << A->getName() << "\n";
-                        assert(0);
-                    }
-                    idom[B] = A;
-                    // break;
-                }
-            }
+            BasicBlock* idom = getIdom(dominanceResult, domain[indB]);
+            idom_map[B] = idom;
         }
 
-        return idom;
+        return idom_map;
     }
 
     void DominanceAnalysis::printIdom(std::unordered_map<BasicBlock*, BasicBlock*> idom, Loop* L) {

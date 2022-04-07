@@ -6,7 +6,7 @@
 #ifndef __DOMINANCE_H
 #define __DOMINANCE_H
 
-#include <set>
+#include <unordered_set>
 #include <queue>
 #include <vector>
 #include <unordered_map>
@@ -63,6 +63,7 @@ namespace llvm {
 			// Compute Dominance Tree
 			void computeDominanceTree(std::unordered_map<BasicBlock*, BasicBlock*> idom, Loop* L);
 
+			BasicBlock* getIdom(DataFlowResult& domResult, BasicBlock* node);
 
 		protected:
 

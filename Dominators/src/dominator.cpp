@@ -12,9 +12,6 @@ namespace llvm {
 
 	bool DominatorPass::runOnLoop(Loop *L, LPPassManager &no_use) {
 
-		// From the LLVM documentation, we know that LoopPass calls runOnLoop on the loops in the loop nest order, so the outermost loop is processed last.
-		// So we don't need to take care of LICM "bubbling" all the way through.
-
 		// Ignore loops without a pre-header
 		BasicBlock* preheader = L->getLoopPreheader();
 		if (!preheader) {
