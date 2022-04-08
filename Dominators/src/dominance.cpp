@@ -85,7 +85,7 @@ namespace llvm {
 
         for (int indB = 0; indB < domain.size(); ++indB) {
             BasicBlock* idom = getIdom(dominanceResult, domain[indB]);
-            idom_map[B] = idom;
+            idom_map[domain[indB]] = idom;
         }
 
         return idom_map;
