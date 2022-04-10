@@ -7,7 +7,7 @@
 
 using namespace std;
 
-namespace llvm {
+namespace llvm_asst3 {
 
     // Compute Dominance Relations
     DataFlowResult DominanceAnalysis::computeDom(Loop* L) {

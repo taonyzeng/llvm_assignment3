@@ -12,13 +12,13 @@
 
 #include "dominance.h"
 
-namespace llvm {
+namespace llvm_asst3 {
 
 	class DominatorPass : public LoopPass {
 		public:
 			static char ID;
 
-			DominanceAnalysis dom_analysis;
+			llvm_asst3::DominanceAnalysis dom_analysis;
 
 			DominatorPass() : LoopPass(ID) {};
 

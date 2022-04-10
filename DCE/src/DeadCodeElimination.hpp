@@ -10,7 +10,9 @@
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/ADT/PostOrderIterator.h"
 
-namespace llvm{
+using namespace llvm;
+
+namespace llvm_asst3{
 
     // DCE Analysis class
     class DCEAnalysis : public DataFlow {

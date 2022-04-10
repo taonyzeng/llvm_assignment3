@@ -4,7 +4,7 @@
 
 #include "DeadCodeElimination.hpp"
 
-namespace llvm{
+namespace llvm_asst3{
 
     DCE::DCE() : FunctionPass(ID) {
         // Setup the pass

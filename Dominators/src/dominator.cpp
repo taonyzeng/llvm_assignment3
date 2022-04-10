@@ -2,7 +2,7 @@
 
 #include "dominator.h"
 
-namespace llvm {
+namespace llvm_asst3 {
 
 
 	void DominatorPass::getAnalysisUsage(AnalysisUsage& AU) const {

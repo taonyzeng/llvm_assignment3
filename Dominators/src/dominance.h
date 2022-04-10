@@ -19,8 +19,9 @@
 #include "../../LIBS/dataflow.h"
 
 using namespace std;
+using namespace llvm;
 
-namespace llvm {
+namespace llvm_asst3 {
 
 	// Dominance Tree Node	
 	class DomTreeNode {
