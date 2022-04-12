@@ -23,4 +23,4 @@ sub-make:
 
 # CLEAN
 clean:
-	rm -f *.o *~ *.so out $(TEST)/*.bc out*                
+	rm -f *.o *~ *.so out $(TEST)/*.bc out* $(SRC_DIR)/*.o                
