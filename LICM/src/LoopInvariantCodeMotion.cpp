@@ -218,7 +218,8 @@ namespace llvm_asst3{
      /// uses, allowing us to hoist a loop body in one pass without iteration.
      ///
      bool LICM::hoistRegion(LoopInfo *LI, DominatorTree *DT,Loop *CurLoop) {
-      
+
+        outs() << "hoist started.....\n";
        // Keep track of instructions that have been hoisted, as they may need to be
        // re-hoisted if they end up not dominating all of their uses.
        std::vector<Instruction*> HoistedInstructions;
@@ -285,9 +286,10 @@ namespace llvm_asst3{
              Changed = true;
            }
         }
-       
+
+        outs() << "hoist ended.....\n";
       
-       return Changed;
+        return Changed;
      }
 
 
